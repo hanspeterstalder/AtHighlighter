@@ -12,7 +12,7 @@ namespace AtHighlighter
 {
     public partial class MainForm : Form
     {
-        private IntPtr _clipboardViewerNext;
+        private IntPtr clipboardViewerNext;
 
         public MainForm()
         {
@@ -22,7 +22,7 @@ namespace AtHighlighter
 
         private void RegisterClipboardViewer()
         {
-            _clipboardViewerNext = User32.SetClipboardViewer(Handle);
+            clipboardViewerNext = User32.SetClipboardViewer(Handle);
         }
 
         /// <summary>
@@ -30,11 +30,11 @@ namespace AtHighlighter
         /// </summary>
         private void UnRegisterClipboardViewer()
         {
-            User32.ChangeClipboardChain(Handle, _clipboardViewerNext);
+            User32.ChangeClipboardChain(Handle, clipboardViewerNext);
         }
 
 
-        private void GetClipboardData()
+        private void GetClipboardDataAndShowOverlay()
         {
             // Data on the clipboard uses the 
             // IDataObject interface
@@ -64,13 +64,12 @@ namespace AtHighlighter
             var text = (string) iData.GetData(DataFormats.Text);
             Debug.WriteLine(text);
 
-            if (TryParseRect(text, out var rect))
-            {
-                var overlayManager = new WinFormsOverlayManager();
-                overlayManager.ShowBlocking(
-                    new Rectangle(rect.Left, rect.Top, rect.Right - rect.Left, rect.Bottom - rect.Top), Color.Red,
-                    rect.Duration);
-            }
+            if (!TryParseRect(text, out var rect)) return;
+
+            var overlayManager = new WinFormsOverlayManager();
+            overlayManager.ShowBlocking(
+                new Rectangle(rect.Left, rect.Top, rect.Right - rect.Left, rect.Bottom - rect.Top), Color.Red,
+                rect.Duration);
         }
 
         private bool TryParseRect(string text, out AtRect rect)
@@ -78,6 +77,18 @@ namespace AtHighlighter
             try
             {
                 var result = JsonConvert.DeserializeObject<AtRect>(text);
+
+                if (result == null)
+                {
+                    rect = null;
+                    return false;
+                }
+
+                if (result.Left >= result.Right || result.Top >= result.Bottom || result.Duration <= 0)
+                {
+                    rect = null;
+                    return false;
+                }
                 rect = result;
                 return true;
             }
@@ -103,14 +114,14 @@ namespace AtHighlighter
                 {
                     Debug.WriteLine("WindowProc DRAWCLIPBOARD: " + m.Msg, "WndProc");
 
-                    GetClipboardData();
+                    GetClipboardDataAndShowOverlay();
 
                     //
                     // Each window that receives the WM_DRAWCLIPBOARD message 
                     // must call the SendMessage function to pass the message 
                     // on to the next window in the clipboard viewer chain.
                     //
-                    User32.SendMessage(_clipboardViewerNext, (uint) m.Msg, m.WParam, m.LParam);
+                    User32.SendMessage(clipboardViewerNext, (uint) m.Msg, m.WParam, m.LParam);
                     break;
                 }
 
@@ -134,15 +145,15 @@ namespace AtHighlighter
                     // the clipboard viewer chain 
                     // lParam is the Handle to the next window in the chain 
                     // following the window being removed. 
-                    if (m.WParam == _clipboardViewerNext)
+                    if (m.WParam == clipboardViewerNext)
                         //
                         // If wParam is the next clipboard viewer then it
                         // is being removed so update pointer to the next
                         // window in the clipboard chain
                         //
-                        _clipboardViewerNext = m.LParam;
+                        clipboardViewerNext = m.LParam;
                     else
-                        User32.SendMessage(_clipboardViewerNext, (uint) m.Msg, m.WParam, m.LParam);
+                        User32.SendMessage(clipboardViewerNext, (uint) m.Msg, m.WParam, m.LParam);
 
                     break;
                 }
