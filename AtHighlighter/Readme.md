@@ -1,4 +1,4 @@
 ﻿# Highligts Rectangels from Clipboard
 
-# Tanks
+# Thanks
 -  Code Used from Repo https://github.com/FlaUI/FlaUI
